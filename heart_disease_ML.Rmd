@@ -1,0 +1,264 @@
+---
+title: 'Determining the optimal machine learning method to predict the presence of heart disease'
+author: "Danya Murali, Amreen Gillani, Eyerusalem Abebe"
+output:
+  word_document: default
+  pdf_document: default
+  html_document: default
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+
+library(tidyverse)
+library(MASS)
+library(leaps)
+library(tree)
+library(class)
+library(randomForest)
+
+```
+
+### Introduction
+
+This project explores the presence of heart disease in patients. Using a series of statistical machine learning techniques, we will build classification models to determine if a patient will be diagnosed with heart disease (Outcome) based on other medical variables measured in this dataset. Ulimately, we seek the machine learning method with the highest classification rate in determining heart disease in a patient.
+
+The data was gathered by the Hungarian Insititue of Cardiology, the Zurich University Hospital, the Basel University Hosptial, and the V.A. Medical center and published to the UCI Machine Learning Repository. The final clean dataset that is used for analysis was downloaded from Kaggle. 
+
+The final dataset contains 14 variables: 
+
+1. Age - in years 
+2. Sex (1 = male; 0 = female) 
+3. Cp - chest pain type (1 = typical angina, 2 = atypical angina, 3 = non-anginal pain, 4 = asymptomatic) 
+4. Trestbps - resting blood pressure (in mm Hg on admission to the hospital)
+5. Chol - serum cholesterol in mg/dl 
+6. Fbs - fasting blood sugar > 120 mg/dl (1 = true; 0 = false)
+7. Restecg - resting electrocardiographic results 
+8. Thalach - maximum heart rate achieved
+9. Exang - exercise induced angina (1 = yes; 0 = no)
+10. Oldpeak -  ST depression induced by exercise relative to rest 
+11. Slop - the slope of the peak exercise ST segment 
+12. Ca - number of major vessels (0-3) colored by fluoroscopy
+13. Thal - (3 = normal; 6 = fixed defect; 7 = reversible defect) 
+14. Outcome - diagnosis of heart disease, fixed as a binomial variable (0 = no presence; 1 = some presence)
+
+
+
+
+```{r download}
+hdata <- read.csv("hdata.csv")
+hdata <- hdata %>% mutate(sex=as.factor(sex), cp=as.factor(cp), fbs=as.factor(fbs), 
+                          exang=as.factor(exang), outcome=as.factor(outcome))
+attach(hdata)
+```
+
+
+### Method 1: Logistic Regression
+
+We find that based on the t-test, six variables are significant within a 0.05 alpha level:
+sex, cp, trestbps, thalach, slop, ca.
+
+```{r logstic1}
+
+reg = glm(outcome ~ ., data=hdata, family="binomial")
+summary(reg)
+
+```
+
+Using regsubsets to perform variable selection, we will use Mallow's Cp, BIC, and Adjusted Rsq to determine the most significant parameters for the model. We find that all three methods indicate that 8 variables should be used.
+```{r logistic2}
+reg.fit = regsubsets(outcome ~., data=hdata, method="backward")
+
+which.max(summary(reg.fit)$adjr2)
+which.min(summary(reg.fit)$cp)
+which.min(summary(reg.fit)$bic)
+
+```
+
+Using backward elimination variable selection, we plot the model, scaling by the selection criteria to determine which predictors should be used.
+
+Mallow's Cp, Adjusted Rsq and BIC all suggest that we should use the predictors: sex, cp, exang, slop, ca, thal. Some of the 8 suggested above were dummy variables of the same predictor so in actualitly, there were six. 
+
+```{r logistic3}
+
+reg2 = regsubsets(outcome ~., data=hdata, method="backward")
+
+plot(reg2, scale="Cp")
+plot(reg2, scale="adjr2")
+plot(reg2, scale="bic")
+```
+
+We will fit our reduced model using the six predictors suggested above. We find that the testing classification rate for this method is 0.829.
+
+```{r logistic4}
+n = nrow(hdata)
+Z = sample(n, n/2)
+
+reg.red = glm(outcome ~ sex + cp + exang + slop + ca + thal, 
+              family="binomial", data=hdata[Z,])
+
+yhat = predict(reg.red, hdata[-Z,], type="response")
+outcome.fit = ifelse(yhat>0.5, 1, 0)
+mean(outcome.fit == outcome[-Z])
+
+```
+
+
+### Method 2: Linear Discriminant Analysis
+
+In a preliminary test, we find that there are 2 sample proportions of groups where the prior probability of some presence of heart disease in a patient is 0.459, and no presence of heart disease is 0.541.
+
+```{r lda}
+h_lda <- lda(outcome ~ ., data=hdata)
+h_lda
+
+```
+
+
+Using "leave-one-out" cross validation, the LDA model correctly classifies 148 out of 164 patients with no presence of heart disease, and correctly classifies 107 out of 139 patients with some presence of heart disease. The testing classification rate of this method is 0.842.
+
+```{r lda2}
+h_lda.fit = lda(outcome ~ ., data=hdata, CV=TRUE)
+table(outcome, h_lda.fit$class)
+mean(outcome == h_lda.fit$class)
+
+```
+
+Another model was fit using LDA, but with a defined prior distribution. In doing so, we find that the testing classification rate is slightly reduced to 0.818.
+
+```{r lda3}
+h_lda_prior.fit = lda(outcome ~ ., data=hdata, prior=c(0.8,0.2), CV=TRUE)
+table(outcome, h_lda_prior.fit$class)
+mean(outcome == h_lda_prior.fit$class)
+
+```
+
+
+### Method 3: Quadratic Discriminant Analysis
+
+Using "leave-one-out" cross validation, the QDA model correctly classifies 136 out of 164 patients with no presence of heart disease, and correctly classifes 107 out of 139 patients with some presence of heart disease. The testing classification rate of this method is 0.802.
+
+```{r qda}
+
+h_qda.fit <- qda(outcome ~ ., data=hdata, CV=TRUE)
+table(outcome, h_qda.fit$class)
+mean(outcome == h_qda.fit$class)
+
+```
+
+Another model was fit using QDA, but with a defined prior distribution. In doing so, we find that the testing classification rate is slightly reduced to 0.795.
+
+```{r qda2}
+
+h_qda_prior.fit = qda(outcome ~ ., data=hdata, prior=c(0.8,0.2), CV=TRUE)
+table(outcome, h_qda_prior.fit$class)
+mean(outcome == h_qda_prior.fit$class)
+
+
+```
+
+### Method 4: Classification Trees
+
+Our initial tree is constructed using the predictors: cp, trestbps, chol, thal, ca, age, oldpeak, and thalach. It contains 13 terminal nodes and its training misclassification error is 0.092, while its testing classification rate is 0.763.
+
+```{r tree}
+
+n = nrow(hdata)
+Z = sample(n, n/2)
+
+tree.fit = tree(outcome ~ ., data=hdata[Z,])
+summary(tree.fit)
+
+outcome.predict = predict(tree.fit, hdata[-Z,], type="class")
+mean(outcome.predict == outcome[-Z])
+
+plot(tree.fit)
+text(tree.fit)
+
+```
+
+Using cross validation to prune the tree, we find that the optimal complexity of the tree that minimizes the misclassification rate is 8. The pruned tree is constructed using the predictors: thal, ca, exang, cp, and thalach. The training misclassification error of this pruned tree is 0.099, and the testing classification rate is 0.803.
+
+```{r tree2}
+
+cv = cv.tree(tree.fit, FUN=prune.misclass)
+cv
+
+tree.fit.pruned = prune.misclass(tree.fit, best=8)
+summary(tree.fit.pruned)
+
+outcome.predict.pruned = predict(tree.fit.pruned, hdata[-Z,], type="class")
+mean(outcome.predict.pruned == outcome[-Z])
+
+plot(tree.fit.pruned)
+text(tree.fit.pruned)
+
+```
+
+### Method 5: K-Nearest Neighbor
+
+Using cross validation, we find our optimal K=12 with an associated testing classification rate of 0.691.
+
+```{r knn}
+
+hdata2 <- hdata %>% mutate(sex=as.numeric(sex), cp=as.numeric(cp), fbs=as.numeric(fbs), 
+                          exang=as.numeric(exang), outcome=as.numeric(outcome),
+                          ca=as.numeric(ca), thal=as.numeric(thal))
+
+n = nrow(hdata2)
+Z = sample(n, n/2)
+
+hdata.train = hdata2[Z,]
+hdata.test = hdata2[-Z,]
+
+x.train = hdata.train[,1:13]
+x.test = hdata.test[,1:13]
+y.train = outcome[Z]
+y.test = outcome[-Z]
+
+class.rate = rep(0,20)
+for (k in 1:20){
+  knn.result = knn(x.train, x.test, y.train, k)
+  class.rate[k] = mean(y.test == knn.result)
+}
+k.max = which.max(class.rate)
+k.max
+
+knn.result.cv = knn(x.train, x.test, y.train, k.max)
+mean(y.test == knn.result.cv)
+
+```
+
+### Method 6: Random Forest
+
+In an initial fit, 3 variables are sampled at each node. The rule of thumb for optimizing the number of variables sampled at each node is the root of the number of predictors. Since there are 13 predictors, we choose mtry=4. To determine how many trees to grow, we try to minimize the classification error rate. We find that 708 trees minimize the error rate. The testing classification rate for this method is 0.485.
+
+```{r forest, message=FALSE, warning=FALSE}
+
+rf = randomForest(outcome ~ ., data=hdata)
+rf
+
+rf4 = randomForest(outcome ~ ., data=hdata, mtry=4)
+which.min(rf4$err.rate)
+
+n = nrow(hdata)
+Z = sample(n, n/2)
+
+rf4.708.cv = randomForest(outcome ~ ., data=hdata, mtry=4, ntree=708, subset=Z)
+yhat = predict(rf, newdata=hdata[-Z])
+mean(yhat == outcome[-Z])
+
+
+```
+
+
+### Discussion 
+
+Given the different techniques used to determine the optimal model for predicting whether heart disease is present within a patient, we conclude that using the "leave-one-out" cross validation with linear discriminant analysis, we are able to correctly predict with a testing classification rate 84.2% of the time with all the predictors.
+
+
+### References
+
+Dataset information: https://archive.ics.uci.edu/ml/datasets/Heart+Disease
+
+Dataset download: https://www.kaggle.com/danimal/heartdiseaseensembleclassifier/data
