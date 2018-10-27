@@ -1,12 +1,12 @@
 # Heart-Disease
 
 This project tested 6 different machine learning classification methods to heart disease data collected by the Hungarian Institute of Cardiology, the Basel University Hospital, and the V.A. Medical Center. The goal of the project was to find the machine learning method that had the highest classification rate in determining if a patient would be diagonsed with heart disease based on other medical variables measured in this dataset. The 6 methods that were tested were: 
-Logistic Regression
-Linear Discriminant Analysis
-Quadratic Discriminant Analysis
-Classification Trees
-K-Nearest Neighbor
-Random Forest
+1. Logistic Regression
+2. Linear Discriminant Analysis
+3. Quadratic Discriminant Analysis
+4. Classification Trees
+5. K-Nearest Neighbor
+6. Random Forest
 
 The dataset was published to the UCI Machine Learning Repository, and the final dataset used in this project was downloaded from Kaggle.
 
